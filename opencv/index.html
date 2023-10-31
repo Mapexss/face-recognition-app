@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV JS</title>
+    <script async src="./lib/opencv.js" onload="openCvReady();"></script>
+    <script src="./js/main.js"></script>
+</head>
+
+<body>
+    <video id="camera" width="640" height="480" style="object-fit: cover;"></video>
+    <canvas id="canvas" style="width: 640px; height: 480px;"></canvas>
+    <button onclick="capturarFoto()">Capturar Foto</button>
+</body>
+
+<script type="text/JavaScript">
+let primeiroVetor = null;
+let segundoVetor = null;
+
+function openCvReady() {
+    cv['onRuntimeInitialized'] = () => {
+        const elementoVideo = document.getElementById("camera");
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(function(stream) {
+            elementoVideo.srcObject = stream;
+            elementoVideo.play();
+        })
+        .catch(function(err) {
+            console.log("Ocorreu um erro! " + err);
+        });
+        
+        const matrizEntrada = new cv.Mat(elementoVideo.height, elementoVideo.width, cv.CV_8UC4);
+        const matrizSaida = new cv.Mat(elementoVideo.height, elementoVideo.width, cv.CV_8UC1);
+        const capturaVideo = new cv.VideoCapture(camera);
+        const classificadorRosto = new cv.CascadeClassifier();
+
+        const arquivoCascataRosto = 'haarcascade_frontalface_default.xml';
+        utilidades.criarArquivoAPartirDeUrl(arquivoCascataRosto, arquivoCascataRosto, () => {
+            classificadorRosto.load(arquivoCascataRosto);
+        });
+
+        const FPS = 30;
+
+        function capturarCaracteristicas(matrizCinza) {
+            // Implemente a lógica para extrair as características do rosto
+            // e retorne o vetor de características
+            let vetorCaracteristicas = []; // Substitua isso com as verdadeiras características
+            return vetorCaracteristicas;
+        }
+
+        function capturarFoto() {
+            if (primeiroVetor !== null) {
+                console.log("Já foi capturado um rosto. Não é possível capturar outra foto.");
+                return;
+            }
+
+            let canvas = document.getElementById("canvas");
+            let contexto = canvas.getContext("2d");
+            contexto.drawImage(elementoVideo, 0, 0, canvas.width, canvas.height);
+
+            let imagemCapturada = new cv.Mat(canvas.height, canvas.width, cv.CV_8UC4);
+            cv.imshow(imagemCapturada, canvas);
+            let imagemCinza = new cv.Mat();
+            cv.cvtColor(imagemCapturada, imagemCinza, cv.COLOR_RGBA2GRAY);
+
+            let rostosCapturados = new cv.RectVector();
+            classificadorRosto.detectMultiScale(imagemCinza, rostosCapturados, 1.1, 3, 0);
+
+            if (rostosCapturados.size() === 1) {
+                let roiMatrizCinza = imagemCinza.roi(rostosCapturados.get(0));
+                let vetorCaracteristicas = capturarCaracteristicas(roiMatrizCinza);
+
+                if (primeiroVetor === null) {
+                    primeiroVetor = vetorCaracteristicas;
+                    console.log("Foto capturada e vetor de características gerado.");
+                } else {
+                    segundoVetor = vetorCaracteristicas;
+                    console.log("Segundo vetor de características gerado.");
+
+                    let distancia = euclideanDistance(primeiroVetor, segundoVetor);
+                    console.log("Distância entre os vetores de características:", distancia);
+
+                    let limiar = 100; // Ajuste conforme necessário
+                    if (distancia < limiar) {
+                        console.log("Os vetores correspondem!");
+                    } else {
+                        console.log("Os vetores não correspondem.");
+                    }
+                }
+
+                roiMatrizCinza.delete();
+            } else {
+                console.log("Nenhum rosto ou mais de um rosto detectado na foto. Tente novamente.");
+            }
+
+            imagemCapturada.delete();
+            imagemCinza.delete();
+            rostosCapturados.delete();
+        }
+
+        function processarVideo() {
+            let inicio = Date.now();
+            capturaVideo.read(matrizEntrada);
+            matrizEntrada.copyTo(matrizSaida);
+
+            function processarVideo() {
+            let inicio = Date.now();
+            capturaVideo.read(matrizEntrada);
+            matrizEntrada.copyTo(matrizSaida);
+            cv.cvtColor(matrizSaida, matrizCinza, cv.COLOR_RGBA2GRAY, 0);
+            try {
+                classificadorRosto.detectMultiScale(matrizCinza, rostos, 1.1, 3, 0);
+                console.log(rostos.size());
+
+                for (let i = 0; i < rostos.size(); ++i) {
+                    let roiMatrizCinza = matrizCinza.roi(rostos.get(i));
+                    let roiMatrizSrc = matrizEntrada.roi(rostos.get(i));
+                    let ponto1 = new cv.Point(rostos.get(i).x, rostos.get(i).y);
+                    let ponto2 = new cv.Point(rostos.get(i).x + rostos.get(i).width,
+                                              rostos.get(i).y + rostos.get(i).height);
+                    cv.rectangle(matrizSaida, ponto1, ponto2, [255, 0, 0, 255]);
+
+                    // Ajuste das coordenadas dos retângulos dos olhos para a posição correta na imagem completa
+                    let olhos = new cv.RectVector();
+                    classificadorOlhos.detectMultiScale(roiMatrizCinza, olhos);
+                    for (let j = 0; j < olhos.size(); ++j) {
+                        let olho = olhos.get(j);
+                        let pontoOlho1 = new cv.Point(rostos.get(i).x + olho.x, rostos.get(i).y + olho.y);
+                        let pontoOlho2 = new cv.Point(rostos.get(i).x + olho.x + olho.width, rostos.get(i).y + olho.y + olho.height);
+                        cv.rectangle(matrizSaida, pontoOlho1, pontoOlho2, [0, 0, 255, 255]);
+                    }
+                    roiMatrizCinza.delete(); roiMatrizSrc.delete();
+                }
+                cv.imshow("canvas", matrizSaida);
+            } catch (err) {
+                console.log(err);
+            }
+
+            cv.imshow("canvas", matrizSaida);
+
+            let atraso = 1000 / FPS - (Date.now() - inicio);
+            setTimeout(processarVideo, atraso);
+        }
+
+        setTimeout(processarVideo, 0);
+    };
+}
+}
+</script>
+
+</html>
